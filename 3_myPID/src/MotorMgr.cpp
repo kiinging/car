@@ -4,6 +4,11 @@
  *  Created on: 28 May 2023
  *      Author: jondurrant
  */
+// Note: i have tried using single rising edge of a single encoder (encoder A) 
+// to trigger the calculation. It failed. Not sure why. (21 Oct 2024)
+//
+// Now, i go back to the original one: using both rising edge and falling edge
+// to trigger the calculation. It works.
 
 #include "MotorMgr.h"
 #include <math.h>
@@ -24,6 +29,8 @@ MotorMgr::MotorMgr(uint8_t gpCW, uint8_t gpCCW, uint8_t gpA, uint8_t gpB)
 	pwm_set_enabled(slice_num, true);
 
     GPIOInputMgr::getMgr()->addObserver(xGPA, this);
+    GPIOInputMgr::getMgr()->addObserver(xGPB, this);
+
 
 }
 
@@ -39,10 +46,8 @@ void MotorMgr::setThrottle(float percent, bool cw) {
     if (xThrottle < 0) { xThrottle = 0.0;}
 
     if (xThrottle == 0.0) {
-        // xActRPM1 = 0.0;
-        // xActRPM2 = 0.0;
-        // xLastTime1 = 0;
-        // xLastTime2 = 0;
+        xActRPS2 = 0.0;  //reset when motor stops.
+        xLastTime2 = 0;
         pwm_set_gpio_level(xGPCW, 0);
         pwm_set_gpio_level(xGPCCW, 0);
         return;
@@ -61,57 +66,96 @@ void MotorMgr::setThrottle(float percent, bool cw) {
 }
 
 void MotorMgr::handleGPIO(uint gpio, uint32_t events) {
-    // Your existing encoder logic
-    int b = gpio_get(xGPB);
-    int increment = (b > 0) ? 1 : -1;
-    xPos += increment;
+    uint8_t c;  // Current state of encoder inputs
+    c = gpio_get(xGPA);  // Read encoder A
+    c = c << 1;
+    c = (gpio_get(xGPB)) | c;  // Combine with encoder B to form a 2-bit state
 
-    // Use Method 2 for velocity calculation if selected
-    // rev per second is used (bcoz of easy to debug the motor speed)
-    uint32_t now = to_ms_since_boot(get_absolute_time());
-    uint32_t ms = now - xLastTime2; //ms per i tick
-    
-    //assume motor has stopped.
-    if (ms > 250){
-        xActRPS2 = 0.0;
-        xLastTime2 = 0;
+     // Handle clockwise (CW) rotation
+    if (xRotEncCW[xLast] == c) {
+        xCount++;  // Increment the count for CW movement
+
+        // Update position if xCount crosses the threshold
+        if (xCount > 3) {
+            xPos++;  // Increment position for CW rotation
+
+            // Check for overflow and reset xPos if necessary
+            if (xPos == INT16_MAX) {
+                xPos = 0;  // Reset position to 0
+                xPosReset = true;  // Indicate position reset
+            } else {
+                xPosReset = false;
+            }
+            updateVelocity_method2(true);  // Trigger method 2
+            xDirection = 1; // indicate CW
+            xCount = 0;  // Reset count after handling rotation
+        }
+
+        xLast = c;  // Store current state as the last state
     }
 
+    // Handle counterclockwise (CCW) rotation
+    if (xRotEncCCW[xLast] == c) {
+        xCount--;  // Decrement the count for CCW movement
+
+        // Update position if xCount crosses the threshold
+        if (xCount < -3) {
+            xPos--;  // Decrement position for CCW rotation
+
+            // Check for underflow and reset xPos if necessary
+            if (xPos == INT16_MIN) {
+                xPos = 0;  // Reset position to 0
+                xPosReset = true;  // Indicate position reset
+            } else {
+                xPosReset = false;
+            }
+
+            updateVelocity_method2(false);  // Trigger method 2
+            xDirection = 0; // indicate CCW
+            xCount = 0;  // Reset count after handling rotation
+        }
+
+        xLast = c;  // Store current state as the last state
+    }
+}
+
+void MotorMgr::updateVelocity_method2(bool cw){
+    uint32_t now = to_us_since_boot(get_absolute_time());
     if (xLastTime2 != 0) {
-        float rps = 1000.0 / (float)ms;
+        uint32_t us = now - xLastTime2;
+        float rps = 1000000.0 / (float)us;
         rps = rps / xNumTicks;  // Convert to Rev per second
-        xActRPS2 = rps * increment;     // Apply direction to rev per second
-    //    xMvAvgRPS2 = (rps * 1.0 + xMvAvgRPS2 * 3.0) / 4.0;  // Moving average of RPM
+
+        // Apply direction: positive for clockwise, negative for counterclockwise
+        xActRPS2 = (cw) ? rps : -rps;
     }
     xLastTime2 = now;
-    
 }
+
 
 
 //Use Method 1 to calculate velocity
 void MotorMgr::updateVelocity_method1() {       
-    uint32_t now  = to_ms_since_boot(get_absolute_time());
-    uint32_t ms = (now - xLastTime1) ; //ms per one slot
+    uint32_t now  = to_us_since_boot(get_absolute_time());
+    uint32_t us = (now - xLastTime1) ; //ms per one slot
     int16_t ticks;
-    
-     // Handle overflow when xPos wraps from INT16_MAX (32767) to INT16_MIN (-32768)
-    if (xPos < 0 && posPrev > 0 && (posPrev - xPos) > 32000) {
-        // Overflow occurred, adjust the tick difference
-        ticks = (INT16_MAX - posPrev) + (xPos - INT16_MIN) + 1;
-    } 
-    // Handle underflow when xPos wraps from INT16_MIN (-32768) to INT16_MAX (32767)
-    else if (xPos > 0 && posPrev < 0 && (xPos - posPrev) > 32000) {
-        // Underflow occurred, adjust the tick difference
-        ticks = (INT16_MIN - posPrev) + (xPos - INT16_MAX) - 1;
-    } 
-    else {
-        // Normal case, no overflow or underflow
+      
+    // Detect overflow or underflow and adjust tick calculation
+    if ((xPos - posPrev) > 15000) {
+        // Overflow: calculate ticks considering the reset at INT16_MAX
+        ticks = xPos +  (INT16_MAX - posPrev);
+    } else if ((xPos - posPrev) < -15000) {
+        // Underflow: calculate ticks considering the reset at INT16_MIN
+        ticks = xPos + (INT16_MIN - posPrev) ;
+    } else {
+        // Normal case: no overflow or underflow
         ticks = xPos - posPrev;
     }
-    
-    float rps = 1000.0 / (float)ms;
-    rps = ticks * rps / xNumTicks; // rev per second
-    xActRPS1 = rps;
+
+    // Calculate Revolutions Per Second (RPS)
+    float rps = 1000000.0 / (float)us; // Time-based RPS calculation
+    rps = ticks * rps / xNumTicks;  // Convert ticks to RPS
+    xActRPS1 = rps;                 // Store the actual RPS
 
       // Low-pass filter (25 Hz cutoff)
     xFiltRPS1 = 0.854*xFiltRPS1 + 0.0728*xActRPS1 + 0.0728*xFiltRPS1_Prev;
@@ -120,10 +164,26 @@ void MotorMgr::updateVelocity_method1() {
     xFiltRPS2_Prev = xFiltRPS2;
 
     // Send the filtered values over serial
-    printf("%.2f,%.2f\n", xFiltRPS1, xFiltRPS2);
+//    printf("%.2f,%.2f\n", xFiltRPS1, xFiltRPS2);
  
     posPrev = xPos;
     xLastTime1 = now;
     
 }
 
+float MotorMgr::getRPS1(){
+    return xActRPS1;
+}
+
+float MotorMgr::getRPS2(){
+    return xActRPS2;
+}
+
+int16_t MotorMgr::getPos(){
+    return xPos;
+}
+
+// Method to get the direction (CW or CCW)
+bool MotorMgr::getDirection() {
+    return xDirection;  // true if CW, false if CCW
+}

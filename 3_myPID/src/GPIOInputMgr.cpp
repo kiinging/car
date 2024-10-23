@@ -43,7 +43,7 @@ void GPIOInputMgr::addObserver(uint gpio, GPIOObserver *obs){
 
 	//Setup Interrupt
 	gpio_set_irq_enabled_with_callback(gpio,
-		GPIO_IRQ_EDGE_RISE, // | GPIO_IRQ_EDGE_FALL,
+		GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
 		true,
 		GPIOInputMgr::gpioCallback
 	);

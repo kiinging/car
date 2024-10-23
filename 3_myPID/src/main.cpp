@@ -1,3 +1,4 @@
+///home/pizza/ros2_projects/jondurrant/DDD-Exp/3_myPID/build/src/DDD.elf
 #include <cstdio> // Add this include
 #include "pico/stdlib.h"
 #include "MotorMgr.h"
@@ -28,13 +29,17 @@ int main(void) {
     printf("GO\n");
 
     // Create motor managers using Method 1 or Method 2
-    MotorMgr leftMotor(LEFT_PWR_CW, LEFT_PWR_CCW, LEFT_ROTENC_A, LEFT_ROTENC_B);  
- //   MotorMgr rightMotor(RIGHT_PWR_CW, RIGHT_PWR_CCW, RIGHT_ROTENC_A, RIGHT_ROTENC_B); 
+    MotorMgr leftMotor (LEFT_PWR_CW, LEFT_PWR_CCW, LEFT_ROTENC_A, LEFT_ROTENC_B);  
+    MotorMgr rightMotor(RIGHT_PWR_CW, RIGHT_PWR_CCW, RIGHT_ROTENC_A, RIGHT_ROTENC_B); 
+   
+    leftMotor.setThrottle(0, 1);
+    
 
     bool cw = true;
     uint32_t lastUpdate = to_ms_since_boot(get_absolute_time());  // Store last update time
     uint32_t count = 0;  // Counter for timing throttle adjustment
-    float throttle = 0.3;  // Initial throttle value
+    uint32_t count2 = 0;
+    float throttle = 0.25;  // Initial throttle value
 
     for (;;) {
         // Get the current time in milliseconds
@@ -42,22 +47,31 @@ int main(void) {
         
         // Call updateVelocity_method1() every 1 ms
         if (currentTime - lastUpdate >= 1) {  // 1 ms has passed
-            leftMotor.updateVelocity_method1();  // Update left motor velocity
+            rightMotor.updateVelocity_method1();  // Update left motor velocity
         //    rightMotor.updateVelocity_method1();  // Update right motor velocity
             lastUpdate = currentTime;  // Reset last update time
             count++;  // Increment count after every 1 ms
+            count2++;
+
+            if (count2 >= 500) {
+             //   printf("%.2f\n", leftMotor.getRPM());
+                printf("%d,%d,%.2f,%.2f\n",rightMotor.getPos(), rightMotor.getDirection(), rightMotor.getRPS1(), rightMotor.getRPS2() );
+
+                count2 = 0;
+            
+            }
             
             // After 10,000 iterations (approx. 10 seconds), adjust throttle
-            if (count >= 10000) {
-                throttle += 0.1;  // Increase throttle by 0.1
+            if (count >= 5000) {               
+                throttle += 0.05;  // Increase throttle by 0.1
                 if (throttle > 0.6) {
-                    throttle = 0.3;  // Reset throttle back to 0.3 after reaching 0.6
+                    throttle = 0.25;  // Reset throttle back to 0.3 after reaching 0.6
                     cw = !cw;  // Change motor direction
                 }
-                leftMotor.setThrottle(throttle, cw);  // Set new throttle for left motor
+                rightMotor.setThrottle(throttle, cw);  // Set new throttle for left motor
          //       rightMotor.setThrottle(throttle, cw);  // Set new throttle for right motor
                 count = 0;  // Reset counter after throttle adjustment
             }
         }
-    }
+   }
 }

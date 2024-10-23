@@ -36,6 +36,16 @@ public:
 	void setThrottle(float percent, bool cw);
 
     void updateVelocity_method1(); 
+	void updateVelocity_method2(bool cw); 
+
+
+	float getRPS1();
+	float getRPS2();
+
+
+	int16_t getPos();
+
+	bool getDirection();  // Returns true for CW, false for CCW
 
 protected:
     /***
@@ -70,6 +80,7 @@ private:
     uint32_t xLastTime1 = 0;
 
     //variables for method 2
+	bool xPosReset = false;
     uint32_t xLastTime2 = 0;
             
 
@@ -79,13 +90,15 @@ private:
 	// Last position of switches
 	uint8_t xLast=0;
 
-
-
 	// Count way through the signal
 	int8_t xCount=0;
 
+	bool xDirection;  // true for CW, false for CCW
 
 
+	//These are lookups for the sequence to see in CW and CCW motion
+	uint8_t xRotEncCW[4] ={2,0,3,1};
+	uint8_t xRotEncCCW[4]={1,3,0,2};
 	
 };
 

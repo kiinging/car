@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-# Setup serial port
-ser = serial.Serial('COM_PORT', 115200)  # Change 'COM_PORT' to your actual port
+# Setup serial port (try ttyACM0 first, or ttyAMA0 if it doesn't work)
+ser = serial.Serial('/dev/ttyACM0', 115200)  # Or try '/dev/ttyAMA0'
 ser.flushInput()
 
 # Data storage
@@ -19,7 +19,7 @@ plt.figure(figsize=(10, 5))
 line1, = plt.plot(time_array, xFiltRPS1, label='Filtered RPS Method 1', color='blue')
 line2, = plt.plot(time_array, xFiltRPS2, label='Filtered RPS Method 2', color='orange')
 plt.xlim(0, time_window)
-plt.ylim(-10, 10)  # Adjust based on expected RPS values
+plt.ylim(-1, 1)  # Adjust based on expected RPS values
 plt.xlabel('Time (s)')
 plt.ylabel('Filtered RPM')
 plt.title('Filtered RPM over Time')
@@ -48,7 +48,8 @@ def update(frame):
     return line1, line2
 
 # Animation
-ani = FuncAnimation(plt.gcf(), update, interval=100)  # Update every 100ms
+anim = FuncAnimation(plt.gcf(), update, interval=100, cache_frame_data=False)  # Assign the animation to a variable
+
 plt.show()
 
 # Close serial when done
