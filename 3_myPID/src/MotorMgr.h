@@ -35,7 +35,7 @@ public:
 	 */
 	void setThrottle(float percent, bool cw);
 
-    void updateVelocity_method1(); 
+    void updateVelocity_method1(float time); 
 	void updateVelocity_method2(bool cw); 
 
 
@@ -67,21 +67,26 @@ private:
 	uint8_t xGPB;
 
 	float xThrottle = 0.0;
-	float xActRPS1 = 0.0;  //rev per second
-    float xActRPS2 = 0.0;
+	
+    
 	float xFiltRPS1 = 0.0;
     float xFiltRPS2 = 0.0;
 	float xFiltRPS1_Prev = 0.0;
     float xFiltRPS2_Prev = 0.0;
 
-	// variables for method 1
-	int16_t xPos = 0;
-    int16_t posPrev = 0;
+	// variables for method 1 
+	// Use the "volatile" directive for variables when the variables are
+	// used in ISR and main
+// used in an interrupt
+	volatile int32_t xPos = 0;
+    int32_t posPrev = 0;
     uint32_t xLastTime1 = 0;
+	volatile float xActRPS1 = 0.0;  //rev per second
 
     //variables for method 2
-	bool xPosReset = false;
+	//bool xPosReset = false;
     uint32_t xLastTime2 = 0;
+	volatile float xActRPS2 = 0.0;
             
 
 	// Number of ticks to track in total rotation

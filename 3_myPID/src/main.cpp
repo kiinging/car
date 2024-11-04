@@ -1,4 +1,6 @@
 ///home/pizza/ros2_projects/jondurrant/DDD-Exp/3_myPID/build/src/DDD.elf
+// https://www.youtube.com/watch?v=HRaZLCBFVDE
+//https://github.com/curiores/ArduinoTutorials/blob/main/SpeedControl/SpeedControl/SpeedControl.ino
 #include <cstdio> // Add this include
 #include "pico/stdlib.h"
 #include "MotorMgr.h"
@@ -6,13 +8,13 @@
 // NumTick = 211.8 
 
 
-// Left Motor
+// Left Motor connects to TB6612 A inputs
 #define LEFT_PWR_CW     12
 #define LEFT_PWR_CCW    13
 #define LEFT_ROTENC_A   6  
 #define LEFT_ROTENC_B   7  
 
-// Right Motor
+// Right Motor connects to TB6612 B inputs
 #define RIGHT_PWR_CW    19
 #define RIGHT_PWR_CCW   18
 #define RIGHT_ROTENC_A  8 
@@ -33,33 +35,35 @@ int main(void) {
     MotorMgr rightMotor(RIGHT_PWR_CW, RIGHT_PWR_CCW, RIGHT_ROTENC_A, RIGHT_ROTENC_B); 
    
     leftMotor.setThrottle(0, 1);
+    rightMotor.setThrottle(0, 1);
     
+   // to calculate the number of tick per rev. it was found to be 211.8 ticks.
+    // while (true) {
+    //     printf("Right Motor Position: %d\n", rightMotor.getPos());
+    //     sleep_ms(1000);
+    // }
+
+
 
     bool cw = true;
-    uint32_t lastUpdate = to_ms_since_boot(get_absolute_time());  // Store last update time
+    uint32_t lastUpdate = to_us_since_boot(get_absolute_time());  // Store last update time
     uint32_t count = 0;  // Counter for timing throttle adjustment
-    uint32_t count2 = 0;
     float throttle = 0.25;  // Initial throttle value
 
     for (;;) {
         // Get the current time in milliseconds
-        uint32_t currentTime = to_ms_since_boot(get_absolute_time());
-        
+        uint32_t currentTime = to_us_since_boot(get_absolute_time());
+
+        float deltaT = ((float) (currentTime-lastUpdate))/1.0e3;        
         // Call updateVelocity_method1() every 1 ms
-        if (currentTime - lastUpdate >= 1) {  // 1 ms has passed
-            rightMotor.updateVelocity_method1();  // Update left motor velocity
+        if (deltaT >= 1.0) {  // 1 ms has passed
+            rightMotor.updateVelocity_method1(deltaT);  // Update left motor velocity
+       //     printf("%d,%.2f,%.2f,%.2f,\n",rightMotor.getPos(),throttle,rightMotor.getRPS1(),rightMotor.getRPS2());
+          
         //    rightMotor.updateVelocity_method1();  // Update right motor velocity
             lastUpdate = currentTime;  // Reset last update time
             count++;  // Increment count after every 1 ms
-            count2++;
-
-            if (count2 >= 500) {
-             //   printf("%.2f\n", leftMotor.getRPM());
-                printf("%d,%d,%.2f,%.2f\n",rightMotor.getPos(), rightMotor.getDirection(), rightMotor.getRPS1(), rightMotor.getRPS2() );
-
-                count2 = 0;
-            
-            }
+           
             
             // After 10,000 iterations (approx. 10 seconds), adjust throttle
             if (count >= 5000) {               

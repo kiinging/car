@@ -11,6 +11,7 @@ pico_set_program_version(${NAME} "0.1")
 target_link_libraries(${NAME} 
 	pico_stdlib 
 	hardware_pwm
+  hardware_sync
 	)
 
 
