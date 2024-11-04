@@ -3,6 +3,7 @@ add_executable(${NAME}
         GPIOInputMgr.cpp
         GPIOObserver.cpp  
         MotorMgr.cpp
+ //       MotorPID.cpp
         )
 pico_set_program_name(${NAME} "{NAME}")
 pico_set_program_version(${NAME} "0.1")

@@ -122,29 +122,30 @@ void MotorMgr::updateVelocity_method2(bool cw){
         rps = rps / xNumTicks;  // Convert to Rev per second
 
         // Apply direction: positive for clockwise, negative for counterclockwise
-        xActRPS2 = (cw) ? rps : -rps;
+        //xActRPS2 = (cw) ? rps : -rps;
+        xActRPS2 = rps;
     }
     xLastTime2 = now;
 }
 
 
 
-//Use Method 1 to calculate velocity
-void MotorMgr::updateVelocity_method1(float ms) {  
+//Filtered revolution per second (rps) velocities calculation
+void MotorMgr::updateVelocities(float ms) {  
     int32_t xPos_1;  
     float rps_2;
     // Disable interrupts before entering critical section  
     uint32_t save = save_and_disable_interrupts();  // ATOMIC BLOCK START
     xPos_1 = xPos;
-    rps_2 = xActRPS2;
+    rps_2 = xActRPS2; //rps is calculated using method 2
     // Enable interrupts again after exiting the critical section
     restore_interrupts(save);  // ATOMIC BLOCK END
 
 
-    // Calculate Revolutions Per Second (RPS)
+    // rsp is calculated using method 1
     float rps = 1000.0 / ms; // Time-based RPS calculation
     rps = rps * ((float)(xPos_1-posPrev)) / xNumTicks;  // ticks * (RPS per tick)
-    xActRPS1 = rps;                 // Store the actual RPS
+    xActRPS1 = fabs(rps);                 // Store the actual RPS
     
     posPrev = xPos_1;
       // Low-pass filter (25 Hz cutoff)
@@ -154,19 +155,15 @@ void MotorMgr::updateVelocity_method1(float ms) {
     xFiltRPS2_Prev = xFiltRPS2;
 
     // Send the filtered values over serial
-    printf("%.2f,%.2f\n", xFiltRPS1, xFiltRPS2);
- 
-    
-    // xLastTime1 = now;
-    
+ //   printf("xFiltRPS1: %.2f,2: %.2f, throttle: %.2f, cw: %d\n", xFiltRPS1, xFiltRPS2, xThrottle, xCW);    
 }
 
 float MotorMgr::getRPS1(){
-    return xActRPS1;
+    return xFiltRPS1; // xFiltRPS1; // xActRPS1;
 }
 
 float MotorMgr::getRPS2(){
-    return xActRPS2;
+    return xFiltRPS2; // xActRPS2;
 }
 
 int16_t MotorMgr::getPos(){
@@ -176,4 +173,8 @@ int16_t MotorMgr::getPos(){
 // Method to get the direction (CW or CCW)
 bool MotorMgr::getDirection() {
     return xDirection;  // true if CW, false if CCW
+}
+
+float MotorMgr::getThrottle(){
+	return xThrottle;
 }

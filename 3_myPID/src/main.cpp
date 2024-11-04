@@ -4,6 +4,7 @@
 #include <cstdio> // Add this include
 #include "pico/stdlib.h"
 #include "MotorMgr.h"
+#include "MotorPID.h"
 
 // NumTick = 211.8 
 
@@ -21,61 +22,70 @@
 #define RIGHT_ROTENC_B  9 
 
 // PID constants
-// #define KP  0.55
-// #define KI  0.019
-// #define KD  0.24
+#define KP  0.021 // 0.02
+#define KI  0.000005
+#define KD  0.0000009
 
-int main(void) {
+
+int main( void ){
     stdio_init_all();
-    sleep_ms(2000);
+    sleep_ms(5000);
     printf("GO\n");
 
-    // Create motor managers using Method 1 or Method 2
-    MotorMgr leftMotor (LEFT_PWR_CW, LEFT_PWR_CCW, LEFT_ROTENC_A, LEFT_ROTENC_B);  
-    MotorMgr rightMotor(RIGHT_PWR_CW, RIGHT_PWR_CCW, RIGHT_ROTENC_A, RIGHT_ROTENC_B); 
-   
-    leftMotor.setThrottle(0, 1);
-    rightMotor.setThrottle(0, 1);
-    
-   // to calculate the number of tick per rev. it was found to be 211.8 ticks.
-    // while (true) {
-    //     printf("Right Motor Position: %d\n", rightMotor.getPos());
-    //     sleep_ms(1000);
-    // }
+    MotorPID leftMotor(LEFT_PWR_CW,   LEFT_PWR_CCW,  LEFT_ROTENC_A,  LEFT_ROTENC_B );
+    MotorPID rightMotor(RIGHT_PWR_CW, RIGHT_PWR_CCW, RIGHT_ROTENC_A, RIGHT_ROTENC_B);
+     
+    bool cw = true;    
+    uint32_t count = 0;  // Counter for timing rps adjustment
+    float rps = 1.0;  // Initial throttle value
 
+    leftMotor.setSpeedRPS(rps, cw);
+    rightMotor.setSpeedRPS(rps, cw);
 
+    leftMotor.configPID(  KP, KI, KD);
+    rightMotor.configPID( KP, KI, KD);
 
-    bool cw = true;
     uint32_t lastUpdate = to_us_since_boot(get_absolute_time());  // Store last update time
-    uint32_t count = 0;  // Counter for timing throttle adjustment
-    float throttle = 0.25;  // Initial throttle value
-
-    for (;;) {
-        // Get the current time in milliseconds
+    uint32_t lastThrottleChange = lastUpdate;  // For RPS adjustments
+    const uint32_t pidInterval = 1000;  // 1 ms in microseconds
+    const uint32_t throttleChangeInterval = 10000000;  // 10 seconds in microseconds
+    
+    while (true) {
         uint32_t currentTime = to_us_since_boot(get_absolute_time());
 
-        float deltaT = ((float) (currentTime-lastUpdate))/1.0e3;        
-        // Call updateVelocity_method1() every 1 ms
-        if (deltaT >= 1.0) {  // 1 ms has passed
-            rightMotor.updateVelocity_method1(deltaT);  // Update left motor velocity
-       //     printf("%d,%.2f,%.2f,%.2f,\n",rightMotor.getPos(),throttle,rightMotor.getRPS1(),rightMotor.getRPS2());
-          
-        //    rightMotor.updateVelocity_method1();  // Update right motor velocity
+        // Check if 1 ms (1000 µs) has passed for PID and velocity updates
+        if (currentTime - lastUpdate >= pidInterval) {
+            float deltaT = (currentTime - lastUpdate) / 1e3;  // Convert to milliseconds
+
+
+            // Update velocities and call PID for both motors
+            leftMotor.updateVelocities(deltaT); 
+            rightMotor.updateVelocities(deltaT);  
+
+            leftMotor.doPID();
+            rightMotor.doPID();
+
+            printf("Left(SP): %.2f, Left(PV): %.2f, throttle: %.3f, cw: %d\n",rps, leftMotor.getRPS1(), leftMotor.getThrottle(), cw);   
+
             lastUpdate = currentTime;  // Reset last update time
-            count++;  // Increment count after every 1 ms
-           
-            
-            // After 10,000 iterations (approx. 10 seconds), adjust throttle
-            if (count >= 5000) {               
-                throttle += 0.05;  // Increase throttle by 0.1
-                if (throttle > 0.6) {
-                    throttle = 0.25;  // Reset throttle back to 0.3 after reaching 0.6
-                    cw = !cw;  // Change motor direction
-                }
-                rightMotor.setThrottle(throttle, cw);  // Set new throttle for left motor
-         //       rightMotor.setThrottle(throttle, cw);  // Set new throttle for right motor
-                count = 0;  // Reset counter after throttle adjustment
-            }
         }
-   }
+        // Check if 10 seconds have passed to adjust the throttle
+        if (currentTime - lastThrottleChange >= throttleChangeInterval) {
+            rps += 1.0;
+            if (rps >= 5.0) {
+                rps = 1.0; // Reset throttle back to 1.0 rps after reaching 3.0 
+                cw = !cw;  // Change motor direction
+                
+                // Stop the motors before reversing
+                leftMotor.setSpeedRPS(0.0,  cw);
+                rightMotor.setSpeedRPS(0.0, cw);
+                sleep_ms(1000);
+            }
+            leftMotor.setSpeedRPS(rps, cw);
+            rightMotor.setSpeedRPS(rps, cw);
+
+            // Reset the last throttle change time
+            lastThrottleChange = currentTime;
+        }    	
+    }
 }

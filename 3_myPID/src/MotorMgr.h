@@ -35,7 +35,7 @@ public:
 	 */
 	void setThrottle(float percent, bool cw);
 
-    void updateVelocity_method1(float time); 
+    void updateVelocities(float time); 
 	void updateVelocity_method2(bool cw); 
 
 
@@ -46,6 +46,14 @@ public:
 	int16_t getPos();
 
 	bool getDirection();  // Returns true for CW, false for CCW
+
+
+	/***
+	 * Get the throttle speed
+	 * @return 0.0 < o <= 1.0
+	 */
+	float getThrottle();
+
 
 protected:
     /***
@@ -66,8 +74,7 @@ private:
 	uint8_t xGPA;
 	uint8_t xGPB;
 
-	float xThrottle = 0.0;
-	
+	float xThrottle = 0.0;	
     
 	float xFiltRPS1 = 0.0;
     float xFiltRPS2 = 0.0;
